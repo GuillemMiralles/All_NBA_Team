@@ -1,0 +1,788 @@
+---
+title: "ALL NBA TEAM PREDICITON MODEL"
+author: "Guillem Miralles and Miguel Payà"
+date:  "`r Sys.Date()`"  #Pondría la fecha del día actual
+params:
+  lang: ES
+lang: "`r switch(params$lang, ES = 'es-ES', EN = 'en-US')`"
+output:
+  html_document:
+    echo: yes
+    number_sections: yes
+    theme: lumen
+    toc: yes
+  html_notebook:
+    echo: yes
+    number_sections: yes
+    toc: yes
+  pdf_document:
+    toc: yes
+    toc_depth: 3
+    number_sections: yes
+language:
+  label:
+    fig: 'Figura '
+    tab: 'Tabla '
+    eq: 'Ecuación '
+    thm: 'Teorema '
+    lem: 'Lema '
+    def: 'Definición '
+    cor: 'Corolario '
+    prp: 'Proposición '
+    exm: 'Ejemplo '
+    exr: 'Ejercicio '
+    proof: 'Demostración. '
+    remark: 'Nota: '
+    solution: 'Solución. '
+---
+
+
+```{r setup, cache = F, echo = F, message = F, warning = F, tidy = F}
+
+# CONFIGURACIÓN GENERAL
+library(knitr)
+options(width = 100)
+# Opciones generales chunks
+opts_chunk$set(echo=T,message = F, error = F, warning = F, comment = NA, fig.align = 'center', dpi = 100, tidy = F, cache.path = '.cache/', fig.path = './figure/')
+
+#options(xtable.type = 'html')
+knit_hooks$set(inline = function(x) {
+  
+  if(is.numeric(x)) {
+    round(x, getOption('digits'))
+  } else {
+    paste(as.character(x), collapse = ', ')
+  }
+})
+#knit_hooks$set(plot = knitr:::hook_plot_html)
+```
+
+
+
+```{r, cache = F, echo = F, message = F, warning = F, tidy = F}
+# Especificamos las librerías necesarias en esta lista
+
+packages = c("tidyverse","knitr","matlib","pracma","readr","haven","stats4","fitdistrplus","vcd","FNN","ISLR","MASS","dplyr","faraway","car","leaps","boot","pROC","nnet","class","glmnet","pls","plotly","gt","ggplot2","readxl")
+
+#use this function to check if each package is on the local machine
+#if a package is installed, it will be loaded
+#if any are not, the missing package(s) will be installed and loaded
+package.check <- lapply(packages, FUN = function(x) {
+  if (!require(x, character.only = TRUE)) {
+    install.packages(x, dependencies = TRUE)
+    library(x, character.only = TRUE)
+  }
+})
+
+#verify they are loaded
+search()
+```
+# PREDICITON OF ALL NBA TEAM
+
+## 1. SUMMARY: WHAT DO WE WANT?
+
+ALL NBA TEAM of the Year is an annual NBA award given to the best players of the season. Voting is by a group of sports journalists and announcers from the United States and Canada. The team has been chosen in each NBA season, since its inauguration in 1946. The award consists of three quintets consisting of a total of 15 players, five on each team. It originally consisted of two teams, but in 1988 it was increased to three.
+
+Players receive five points for each vote on the first team, three points for each vote on the second team, and one point for each vote on the third team. The five players with the highest total number of points enter the first team, with the next five players integrating the second team and the same with the third. There is a position restriction. In each voting of 5 players (of each quintet), 2 players are voted that are guard, in our data.frame “PG” and “SG”; the other 2 being forward, “SF” and “PF” and the last player being center “C”. They are basically the top 15 players of the season. We will look at the statistics made by these 15 players (in all seasons), and with this information, having the statistics of all the players of the last 35 seasons, we will try to know which will be in the quintet and which not in recent years.
+
+### OBJECTIVE:
+
+Our goal is to make a model that is able to predict these 15 players. To do this we need to make a multiple logistic regression model where, according to each player's statistics, the model gives you a chance to belong to the best quintets. We need to keep in mind the restriction that only certain players in each position can have. We have a database, explained more specifically in point 2. INTRODUCTION TO THE DATABASE where we will have all the information to create this model. We will check the results obtained by the model in some of the last seasons where we already know the results, then we will test it with the statistics we have so far to predict this year’s quintets.
+
+## 2. DATA:
+
+Our information for making this model is divided into two databases: 
+- A database where we have all the information from 1980 to 2017 with all the player statistics for each season. We also introduce the quintetO variable that will provide us with information on whether or not the player is in the quintet of the season.
+- And another where we have the information of the data of the current season.
+In the first database we have the statistics of each player in a given season. The data have the following variables:
+
+|Variables explained in the document|
+
+## 3. PROCESS
+
+We will divide the process into two parts:
+
+- On the one hand we have the creation of the model with a database that contains all the statistics from 1980 to 2017. In this, we will predict the quintets of the years 2015, 2016 and 2017. In the study we will be able to check which players have predicted correctly, and which ones don’t.
+
+- In the second part we will take the data available this year from the competition to the stop due to the COVID-19. In this one we will not be able to check if the model hits the players or not as this prize has not been awarded yet. We will also work on a data.frame that does not contain the same variables (although it is similar) so we will have to create another model.
+
+### 3.1. MODEL CREATION PROCESS WITH KNOWN DATA (1980 - 2017)
+
+The steps we have followed are as follows:
+
+- Reading and cleaning the dataframe (reading the csv, setting the variable type, changing null values to 0, deleting rows with duplicate players…)
+
+```{r}
+#Read csv file
+library(readr)
+Seasons_Stats <- read_csv("Seasons_Stats.csv",
+     col_types = cols(`2P%` = col_number(), 
+         `3P` = col_double(), `3PAr` = col_number(), 
+         `AST%` = col_number(), BLK = col_double(), 
+         `BLK%` = col_number(), BPM = col_double(), 
+         DBPM = col_double(), DRB = col_double(), 
+         `DRB%` = col_number(), `FT%` = col_number(), 
+         FTr = col_number(), GS = col_double(), 
+         MP = col_double(), OBPM = col_double(), 
+         ORB = col_double(), `ORB%` = col_number(), 
+         PER = col_double(), STL = col_double(), 
+         `STL%` = col_number(), `TOV%` = col_number(),`3P%` = col_double() ,
+         `3PA` = col_double(), `TOV` = col_double(),
+         TRB = col_double(), `TRB%` = col_number(), 
+         `TS%` = col_number(), `USG%` = col_number(), 
+         VORP = col_double(), `WS/48` = col_number(), 
+         X1 = col_skip(), Year = col_integer(), 
+         blank2 = col_skip(), blanl = col_skip(), 
+         `eFG%` = col_number()))
+
+```
+
+```{r}
+#We select the data from 80s, when three-point shot is introduced in the NBA.
+library(tidyverse)
+Seasons_Stats2 <- Seasons_Stats %>% subset(Year > 1979)
+```
+
+### Players in the all nba team
+
+```{r}
+#What we want to do is find which players are most likely to be in the best quintet. We will do this based on a training set and a test set.To do this, we will then nail the all_nba team (quinteto) variable, followd by the year (quinteto_year), which will have 1 (if the player is in a better all nba team) and 0 if it is not. In this way, we enter the data, and then we enter the column.
+
+#Those players who have a * in the database are those who have been elected to the Basketball Hall of Fame. We also have it in the database.
+
+quinteto80 <- c("Julius Erving*","Dan Roundfield","Larry Bird*","Marques Johnson","Kareem Abdul-Jabbar*","Moses Malone*","George Gervin*","Dennis Johnson*","Paul Westphal","Gus Williams")
+
+quinteto81 <- c("Julius Erving*","Marques Johnson", "Larry Bird*","Adrian Dantley*","Kareem Abdul-Jabbar*","Moses Malone*","George Gervin*","Otis Birdsong","Dennis Johnson*","Tiny Archibald*")
+
+quinteto82 <- c("Larry Bird*","Alex English*","Julius Erving*","Bernard King*","Moses Malone*","Robert Parish*", "George Gervin*","Magic Johnson*", "Gus Williams","Sidney Moncrief")
+
+quinteto83 <- c("Larry Bird*","Alex English*" ,"Julius Erving*","Buck Williams","Moses Malone*","Kareem Abdul-Jabbar*", "Magic Johnson*","George Gervin*","Sidney Moncrief","Isiah Thomas*")
+
+quinteto84 <- c("Larry Bird*","Adrian Dantley*","Bernard King*" ,"Julius Erving*","Kareem Abdul-Jabbar*","Moses Malone*" ,"Magic Johnson*","Sidney Moncrief" ,"Isiah Thomas*","Jim Paxson")
+
+quinteto85 <- c("Larry Bird*","Terry Cummings","Bernard King*","Ralph Sampson*","Moses Malone*", "Kareem Abdul-Jabbar*","Magic Johnson*","Michael Jordan*","Isiah Thomas*","Sidney Moncrief")
+
+quinteto86 <- c("Larry Bird*","Charles Barkley*","Dominique Wilkins*","Alex English*","Kareem Abdul-Jabbar*","Hakeem Olajuwon*","Magic Johnson*","Sidney Moncrief","Isiah Thomas*","Alvin Robertson")
+
+quinteto87 <- c("Larry Bird*" ,"Dominique Wilkins*","Kevin McHale*","Charles Barkley*","Hakeem Olajuwon*", "Moses Malone*","Magic Johnson*","Isiah Thomas*","Michael Jordan*","Fat Lever")
+
+quinteto88 <- c("Larry Bird*","Karl Malone*","Charles Barkley*","Dominique Wilkins*","Hakeem Olajuwon*", "Patrick Ewing*","Michael Jordan*","Clyde Drexler*","Magic Johnson*","John Stockton*")
+
+quinteto89 <- c("Karl Malone*","Tom Chambers","Dominique Wilkins*", "Charles Barkley*","Chris Mullin*", "Terry Cummings","Hakeem Olajuwon*","Patrick Ewing*","Robert Parish*","Michael Jordan*" ,"John Stockton*","Dale Ellis","Magic Johnson*","Kevin Johnson","Mark Price")
+
+quinteto90 <- c("Karl Malone*","Larry Bird*","James Worthy*","Charles Barkley*","Tom Chambers","Chris Mullin*","Patrick Ewing*","Hakeem Olajuwon*","David Robinson*","Magic Johnson*","John Stockton*","Clyde Drexler*","Michael Jordan*","Kevin Johnson","Joe Dumars*")
+
+quinteto91 <- c("Karl Malone*","Dominique Wilkins*","James Worthy*","Charles Barkley*","Chris Mullin*","Bernard King*","David Robinson*","Patrick Ewing*","Hakeem Olajuwon*","Michael Jordan*" ,"Kevin Johnson","John Stockton*","Magic Johnson*","Clyde Drexler*","Joe Dumars*")
+
+quinteto92 <- c("Karl Malone*","Scottie Pippen*","Dennis Rodman*","Chris Mullin*","Charles Barkley*","Kevin Willis","David Robinson*","Patrick Ewing*","Brad Daugherty","Michael Jordan*","Tim Hardaway","Mark Price", "Clyde Drexler*","John Stockton*","Kevin Johnson")
+
+quinteto93 <- c("Charles Barkley*","Dominique Wilkins*","Scottie Pippen*","Karl Malone*","Larry Johnson", "Derrick Coleman","Hakeem Olajuwon*","Patrick Ewing*","David Robinson*","Michael Jordan*","John Stockton*","Tim Hardaway","Mark Price","Joe Dumars*","Drazen Petrovic*")
+
+quinteto94 <- c("Scottie Pippen*","Shawn Kemp","Derrick Coleman","Karl Malone*","Charles Barkley*","Dominique Wilkins*","Hakeem Olajuwon*","David Robinson*","Shaquille O'Neal*","John Stockton*","Mitch Richmond*","Mark Price","Latrell Sprewell","Kevin Johnson","Gary Payton*")
+
+quinteto95 <- c("Karl Malone*","Charles Barkley*","Detlef Schrempf","Scottie Pippen*","Shawn Kemp","Dennis Rodman*","David Robinson*","Shaquille O'Neal*","Hakeem Olajuwon*","John Stockton*","Gary Payton*","Reggie Miller*","Anfernee Hardaway","Mitch Richmond*","Clyde Drexler*")
+
+quinteto96 <- c("Scottie Pippen*","Shawn Kemp","Charles Barkley*","Karl Malone*","Grant Hill","Juwan Howard","David Robinson*","Hakeem Olajuwon*","Shaquille O'Neal*","Michael Jordan*","Gary Payton*","Mitch Richmond*","Anfernee Hardaway","John Stockton*" ,"Reggie Miller*")
+
+quinteto97 <- c("Karl Malone*" ,"Scottie Pippen*" ,"Anthony Mason","Grant Hill","Glen Rice","Vin Baker", "Hakeem Olajuwon*","Patrick Ewing*","Shaquille O'Neal*" ,"Michael Jordan*" ,"Gary Payton*","John Stockton*","Tim Hardaway","Mitch Richmond*" ,"Anfernee Hardaway")
+
+quinteto98 <- c("Karl Malone*","Grant Hill","Scottie Pippen*","Tim Duncan","Vin Baker","Glen Rice","Shaquille O'Neal*","David Robinson*","Dikembe Mutombo*","Michael Jordan*","Tim Hardaway","Mitch Richmond*" ,"Gary Payton*","Rod Strickland","Reggie Miller*")
+
+quinteto99 <- c("Karl Malone*","Chris Webber" ,"Kevin Garnett","Tim Duncan", "Grant Hill" ,"Antonio McDyess" ,"Alonzo Mourning*","Shaquille O'Neal*","Hakeem Olajuwon*","Allen Iverson*","Gary Payton*","Kobe Bryant","Jason Kidd","Tim Hardaway","John Stockton*")
+
+quinteto00 <- c("Tim Duncan","Karl Malone*","Chris Webber","Kevin Garnett","Grant Hill","Vince Carter","Shaquille O'Neal*","Alonzo Mourning*" ,"David Robinson*","Jason Kidd","Allen Iverson*","Eddie Jones","Gary Payton*","Kobe Bryant","Stephon Marbury")
+
+quinteto01 <- c("Tim Duncan","Kevin Garnett","Karl Malone*","Chris Webber","Vince Carter","Dirk Nowitzki","Shaquille O'Neal*","Dikembe Mutombo*","David Robinson*","Allen Iverson*","Kobe Bryant","Gary Payton*" ,"Jason Kidd","Tracy McGrady","Ray Allen")
+
+quinteto02 <- c("Tim Duncan","Kevin Garnett","Ben Wallace","Tracy McGrady","Chris Webber","Jermaine O'Neal","Shaquille O'Neal*","Dirk Nowitzki","Dikembe Mutombo*","Jason Kidd","Gary Payton*","Paul Pierce", "Kobe Bryant","Allen Iverson*","Steve Nash")
+
+quinteto03 <- c("Tim Duncan","Dirk Nowitzki","Paul Pierce","Kevin Garnett","Chris Webber" ,"Jamal Mashburn","Shaquille O'Neal*","Ben Wallace","Jermaine O'Neal","Kobe Bryant","Jason Kidd","Stephon Marbury","Tracy McGrady","Allen Iverson*","Steve Nash")
+
+quinteto04 <- c("Kevin Garnett","Jermaine O'Neal","Dirk Nowitzki","Tim Duncan","Peja Stojakovicn","Ron Artest","Shaquille O'Neal*","Ben Wallace","Yao Ming*","Kobe Bryant","Sam Cassell","Michael Redd","Jason Kidd","Tracy McGrady","Baron Davis")
+
+quinteto05 <- c("Tim Duncan","LeBron James","Tracy McGrady","Dirk Nowitzki","Kevin Garnett","Shawn Marion", "Shaquille O'Neal*","Amar'e Stoudemire","Ben Wallace","Allen Iverson*","Dwyane Wade","Kobe Bryant","Steve Nash","Ray Allen","Gilbert Arenas")
+
+quinteto06 <- c("LeBron James","Elton Brand","Shawn Marion","Dirk Nowitzki","Tim Duncan","Carmelo Anthony", "Shaquille O'Neal*","Ben Wallace","Yao Ming*","Kobe Bryant","Chauncey Billups","Allen Iverson*","Steve Nash","Dwyane Wade","Gilbert Arenas")
+
+quinteto07 <- c("Dirk Nowitzki","LeBron James","Kevin Garnett","Tim Duncan","Chris Bosh","Carmelo Anthony","Amar'e Stoudemire","Yao Ming*","Dwight Howard","Steve Nash","Gilbert Arenas","Dwyane Wade","Kobe Bryant","Tracy McGrady","Chauncey Billups")
+
+quinteto08 <- c("Kevin Garnett","Dirk Nowitzki","Carlos Boozer","LeBron James","Tim Duncan" ,"Paul Pierce", "Dwight Howard","Amar'e Stoudemire","Yao Ming*","Kobe Bryant","Steve Nash","Tracy McGrady","Chris Paul","Deron Williams","Manu Ginobili")
+
+quinteto09 <- c("LeBron James","Tim Duncan","Carmelo Anthony","Dirk Nowitzki","Paul Pierce","Pau Gasol","Dwight Howard","Yao Ming*","Shaquille O'Neal*","Kobe Bryant","Brandon Roy","Chauncey Billups", "Dwyane Wade","Chris Paul","Tony Parker")
+
+quinteto10 <- c("LeBron James","Dirk Nowitzki","Brandon Roy","Kevin Durant","Steve Nash","Pau Gasol","Dwight Howard","Amar'e Stoudemire","Andrew Bogut","Kobe Bryant","Carmelo Anthony","Tim Duncan", "Dwyane Wade","Deron Williams","Joe Johnson")
+
+quinteto11 <- c("LeBron James","Dirk Nowitzki","LaMarcus Aldridge","Kevin Durant","Amar'e Stoudemire","Zach Randolph","Dwight Howard","Pau Gasol","Al Horford", "Kobe Bryant","Dwyane Wade","Manu Ginobili","Derrick Rose","Russell Westbrook","Chris Paul")
+
+quinteto12 <- c("LeBron James","Kevin Love","Carmelo Anthony","Kevin Durant","Blake Griffin","Dirk Nowitzki","Dwight Howard","Andrew Bynum","Tyson Chandler","Kobe Bryant","Tony Parker","Dwyane Wade","Chris Paul","Russell Westbrook","Rajon Rondo")
+
+quinteto13 <- c("LeBron James","Carmelo Anthony","Paul George","Kevin Durant","Blake Griffin","David Lee", "Tim Duncan","Marc Gasol","Dwight Howard","Kobe Bryant","Tony Parker","Dwyane Wade","Chris Paul","Russell Westbrook","James Harden")
+
+quinteto14 <- c("Kevin Durant","Blake Griffin","Paul George","LeBron James","Kevin Love","LaMarcus Aldridge","Joakim Noah","Dwight Howard","Al Jefferson","James Harden","Stephen Curry","Goran Dragic","Chris Paul","Tony Parker","Damian Lillard")
+
+quinteto15 <- c("LeBron James","LaMarcus Aldridge","Blake Griffin","Anthony Davis","DeMarcus Cousins","Tim Duncan","Marc Gasol","Pau Gasol","DeAndre Jordan","James Harden","Russell Westbrook","Klay Thompson","Stephen Curry","Chris Paul","Kyrie Irving")
+
+quinteto16 <- c("Kawhi Leonard","Kevin Durant","Paul George","LeBron James","Draymond Green","LaMarcus Aldridge","DeAndre Jordan","DeMarcus Cousins","Andre Drummond","Stephen Curry","Damian Lillard","Klay Thompson","Russell Westbrook","Chris Paul","Kyle Lowry")
+
+quinteto17 <- c("Kawhi Leonard","Kevin Durant","Jimmy Butler","LeBron James","Giannis Antetokounmpo","Draymond Green","Anthony Davis","Rudy Gobert","DeAndre Jordan","James Harden","Stephen Curry","John Wall","Russell Westbrook","Isaiah Thomas","DeMar DeRozan")
+quinteto20 <-c('Guillem Miralles','Miguel Payá')
+```
+
+- Introduce a variable in the comic called a quintet, which tells us whether or not the player has been in the ALL NBA TEAM of that season.
+
+```{r}
+#With this function what we do is introduce the all nba team of each year and the year to which it corresponds. Our function what it does is return a data.frame with the new column (quinteto) indicating 1 if the player is in the quintet, and 0 if it is not. Then we will join all the dat.frame in order to get the data for all the seasons.
+
+funcion_quinteto <- function(quinteto_df,any){
+df <- Seasons_Stats2 %>% subset(Year == any)
+quinteto <- 0
+for (i in (1:length(df$Player))) {
+if (df$Player[i] %in% quinteto_df){
+  quinteto[i] = 1
+}else{
+  quinteto[i] = 0
+}
+}
+df_any<- data.frame(quinteto,df)
+return(df_any)
+}
+```
+
+```{r}
+#We apply the function for each year:
+df_any80 <- funcion_quinteto(quinteto80,1980)
+df_any81 <- funcion_quinteto(quinteto81,1981)
+df_any82 <- funcion_quinteto(quinteto82,1982)
+df_any83 <- funcion_quinteto(quinteto83,1983)
+df_any84 <- funcion_quinteto(quinteto84,1984)
+df_any85 <- funcion_quinteto(quinteto85,1985)
+df_any86 <- funcion_quinteto(quinteto86,1986)
+df_any87 <- funcion_quinteto(quinteto87,1987)
+df_any88 <- funcion_quinteto(quinteto88,1988)
+df_any89 <- funcion_quinteto(quinteto89,1989)
+df_any90 <- funcion_quinteto(quinteto90,1990)
+df_any91 <- funcion_quinteto(quinteto91,1991)
+df_any92 <- funcion_quinteto(quinteto92,1992)
+df_any93 <- funcion_quinteto(quinteto93,1993)
+df_any94 <- funcion_quinteto(quinteto94,1994)
+df_any95 <- funcion_quinteto(quinteto95,1995)
+df_any96 <- funcion_quinteto(quinteto96,1996)
+df_any97 <- funcion_quinteto(quinteto97,1997)
+df_any98 <- funcion_quinteto(quinteto98,1998)
+df_any99 <- funcion_quinteto(quinteto99,1999)
+df_any00 <- funcion_quinteto(quinteto00,2000)
+df_any01 <- funcion_quinteto(quinteto01,2001)
+df_any02 <- funcion_quinteto(quinteto02,2002)
+df_any03 <- funcion_quinteto(quinteto03,2003)
+df_any04 <- funcion_quinteto(quinteto04,2004)
+df_any05 <- funcion_quinteto(quinteto05,2005)
+df_any06 <- funcion_quinteto(quinteto06,2006)
+df_any07 <- funcion_quinteto(quinteto07,2007)
+df_any08 <- funcion_quinteto(quinteto08,2008)
+df_any09 <- funcion_quinteto(quinteto09,2009)
+df_any10 <- funcion_quinteto(quinteto10,2010)
+df_any11 <- funcion_quinteto(quinteto11,2011)
+df_any12 <- funcion_quinteto(quinteto12,2012)
+df_any13 <- funcion_quinteto(quinteto13,2013)
+df_any14 <- funcion_quinteto(quinteto14,2014)
+df_any15 <- funcion_quinteto(quinteto15,2015)
+df_any16 <- funcion_quinteto(quinteto16,2016)
+df_any17 <- funcion_quinteto(quinteto17,2017)
+
+```
+
+```{R}
+
+#We unite in order to have all the seasons:
+
+#We set up a training set and a test set. The training set will be stored until 2011, while the test set will be used from 2012 to 2017.
+bd <- rbind(df_any80,df_any81,df_any82,df_any83,df_any84,df_any85,df_any86,df_any87,df_any88,df_any89,
+            df_any90,df_any91,df_any92,df_any93,df_any94,df_any95,df_any96,df_any97,df_any98,df_any99,
+            df_any00,df_any01,df_any02,df_any03,df_any04,df_any05,df_any06,df_any07,df_any08,df_any09,
+            df_any10,df_any11)
+bdpredict<-rbind(df_any12,df_any13,df_any14,df_any15,df_any16,df_any17)
+
+#We remove the NULL values and na's
+bd[is.na(bd)] = 0
+bdpredict[is.na(bdpredict)]= 0
+```
+
+```{r}
+#In the data we have a problem. There are players who are in the all nba team, who in the middle of the season have been transferred to another team. So they have stats from 2 different teams. The database already incorporates the sum of these two statistics, so we have 3 rows with the player's statistics. We are only interested in the total data for the season. The players in this situation are: Dominique Wiklins (1994), Clyde Draxler (1995), Dikembe Mutombo (2001) and Chauncey Billups (2009). We eliminate the two rows that do not interest us in each player (those of the teams).
+
+bd <- bd[-c(6069,6070,6203,6204,9568,9569,13639,13640),]
+df_any17 <-df_any17[-c(112,113),] 
+
+
+```
+
+-	We visualize the data and observe that many of the variables correlate with each other or do not provide us with relevant information. Therefore, having so many predictive variables, want to regularize them.
+
+```{r}
+#We begin the visualization of the variables. Already at first glance if we look at the variables, there are many that can be correlated as they explain the same thing. To see it more clearly, let's look at some of them:
+
+attach(bd)
+pairs( X3P ~ X3PA + X3P.)
+pairs(X2P ~ X2PA + X2P.)
+pairs(WS ~ OWS + DWS + WS.48)
+pairs( PTS ~ FG + FT)
+pairs(BPM ~ DBPM + OBPM)
+pairs(FGA ~ X3PA + X2PA)
+
+#We can observe that many of the variables present us with information that is not entirely relevant. To know which ones we are going to use, we are going to use reduction techniques that help us find the best variables for our model.
+
+```
+
+- We have observed that there are many correlated variables. Therefore we are going to realize the regularization of variables, with the purpose of to reduce the variance of the same. We use the Lasso method and check if the results obtained are adjusted.
+
+#### Dimensionality Reduction with LASSO
+
+```{r}
+
+library(glmnet)
+x <- model.matrix(quinteto~ Pos+Age+G+MP+PER+TS.+X3PAr+FTr+ORB.+TRB.+AST.+STL.+BLK.+TOV.+USG.+OWS+DWS+WS+WS.48+OBPM+DBPM+BPM+VORP+FG+FGA+FG.+X3P+X3PA+X3P.+X2P+X2PA+X2P.+eFG.+FT+FTA+FT.+PF+DRB.+ORB+TRB+DRB+AST+STL+BLK+TOV+PTS,bd)[,-1] 
+y <- bd$quinteto
+
+
+lambdas <- 10^seq(5,-5,length=100)
+set.seed(12345)
+cv.lasso.NBA <- cv.glmnet(x,y,alpha=1,lambda=lambdas)
+plot(cv.lasso.NBA)
+cv.lasso.NBA$lambda.1se
+```
+
+```{r}
+lasso.final <- glmnet(x,y,alpha=1,lambda =round(cv.lasso.NBA$lambda.1se,3))
+coef(lasso.final)[coef(lasso.final)[,1] !=0,]
+#	We observe that these variables are the ones that the Lasso method indicates to us that they are more explanatory, since they have different coefficients from 0.
+```
+
+- We see how the variables we are interested in are greatly reduced. As we are performing a logistic regression, in the variables we obtained from the previous point, we perform three models using three different methods which are the ones we will compare. These three methods are: Multiple Logistic Regression (GLM), Quadratic Discriminant Analysis (QDA), and Linear Discriminant Analysis (LDA). We do not take the KNN method because we already know that neighboring values are not interesting for predicting the next value.
+
+- We make comparisons between the models and look at the following results to choose the one that interests us most.
+
+```{r}
+glmnba <- glm(quinteto ~ Pos+ Age + G + MP + TS. + FTr + STL. + TOV. + USG. +DWS + WS + BPM + VORP + FG + FGA + X2P + FTA + PF + ORB + DRB + AST + STL + BLK, data = bd, family = 'binomial')
+summary(glmnba)
+```
+
+```{r}
+step(glmnba)
+```
+
+### GLM
+
+```{r}
+glmnba.final <-  glm(formula = quinteto ~ Age + G + STL. + TOV. + USG. + DWS + 
+    WS + BPM + VORP + FGA + PF + ORB + AST + BLK, family = "binomial", 
+    data = bd)
+summary(glmnba.final)
+
+```
+
+```{r}
+nba.prob <- predict(glmnba.final,bdpredict,type="response")
+
+nba.pred <- rep("0_NotInAllNba",length(bdpredict$Player))
+nba.pred[nba.prob > 0.5] <- '1'
+(mean(nba.prob - bdpredict$quinteto)^2)
+
+table(nba.pred,bdpredict$quinteto)
+(3462 + 53 )/3559
+```
+
+```{r}
+library(pROC)
+pred2 <- predict(glmnba.final, type="response")
+curv_roc4 <- roc(bd$quinteto,pred2)
+plot(curv_roc4)
+curv_roc4$auc
+ci(curv_roc4)
+```
+
+### QDA
+
+```{r}
+library(MASS)
+qdanba <- qda(formula = quinteto ~ Age + G + STL. + TOV. + USG. + DWS + 
+    WS + BPM + VORP + FGA + PF + ORB + AST + BLK, 
+    data = bd)
+qdanba
+```
+
+```{r}
+qda.pred <- predict(qdanba, bdpredict)
+
+```
+
+```{r}
+qda.class <- qda.pred$class
+table(qda.class,bdpredict$quinteto)
+mean(qda.class == bdpredict$quinteto)
+
+```
+```{r}
+c.roc <- roc(bdpredict$quinteto, qda.pred$posterior[,2])
+plot(c.roc)
+c.roc$auc
+ci(c.roc)
+```
+
+### LDA:
+
+```{r}
+ldanba <- lda(formula = quinteto ~ Age + G + STL. + TOV. + USG. + DWS + 
+    WS + BPM + VORP + FGA + PF + ORB + AST + BLK, 
+    data = bd)
+ldanba
+```
+```{r}
+lda.pred <- predict(ldanba, bdpredict)
+```
+```{r}
+lda.class <- lda.pred$class
+table(lda.class,bdpredict$quinteto)
+mean(lda.class == bdpredict$quinteto)
+```
+
+```{r}
+c2.roc <- roc(bdpredict$quinteto, lda.pred$posterior[,2])
+plot(c2.roc)
+c2.roc$auc
+ci(c2.roc)
+```
+
+We choose the GLM method as it is the one that best predicts true positives and negatives. On the one hand it is the one that reduces the false positives the most (really what interests us to the mistakes that the model makes), but the false negatives are higher than the other models. We can say that all three models are good, but for the above reasons we will stick with the GLM.
+
+```{r}
+bd15 <- rbind(bd,df_any12,df_any13,df_any14)
+
+bd16 <- rbind(bd15,df_any15)
+bd17 <- rbind(bd16,df_any16)
+```
+
+```{r}
+glmnba2015 <- glm(formula = quinteto ~ Age + G + STL. + TOV. + USG. + DWS + 
+    WS + BPM + VORP + FGA + PF + ORB + AST + BLK, family = "binomial", 
+    data = bd15)
+
+nba.prob2015 <- predict(glmnba2015,df_any15,type="response")
+
+nba.pred2015 <- rep("0_NotInAllNba",length(df_any15$Player))
+nba.pred2015[nba.prob2015 > 0.5] <- '1'
+nba2015 <- sort(nba.prob2015, decreasing=TRUE)
+
+prueba2015 <- nba2015[1:40]
+
+probs <- (prueba2015)*100
+nuevodata2015 <- data.frame(probs,df_any15[names(prueba2015),1:5])
+
+```
+
+```{r}
+glmnba2016 <- glm(formula = quinteto ~ Age + G + STL. + TOV. + USG. + DWS + 
+    WS + BPM + VORP + FGA + PF + ORB + AST + BLK, family = "binomial", 
+    data = bd16)
+
+nba.prob2016 <- predict(glmnba2016,df_any16,type="response")
+
+nba.pred2016 <- rep("0_NotInAllNba",length(df_any16$Player))
+nba.pred2016[nba.prob2016 > 0.5] <- '1'
+nba2016 <- sort(nba.prob2016, decreasing=TRUE)
+
+prueba2016 <- nba2016[1:40]
+probs <- (prueba2016)*100
+nuevodata2016 <- data.frame(probs,df_any16[names(prueba2016),1:5])
+```
+
+```{r}
+glmnba2017 <- glm(formula = quinteto ~ Age + G + STL. + TOV. + USG. + DWS + 
+    WS + BPM + VORP + FGA + PF + ORB + AST + BLK, family = "binomial", 
+    data = bd17)
+
+nba.prob2017 <- predict(glmnba2017,df_any17,type="response")
+nba.pred2017 <- rep("0_NotInAllNba",length(df_any17$Player))
+nba.pred2017[nba.prob2017 > 0.5] <- '1'
+nba2017 <- sort(nba.prob2017, decreasing=TRUE)
+
+prueba2017 <- nba2017[1:40]
+probs <- (prueba2017)*100
+nuevodata2017 <- data.frame(probs,df_any17[names(prueba2017),1:5])
+
+```
+
+
+```{r}
+
+
+funcion_posicions_2015 <- function(df){
+
+contG = 0
+contF = 0
+contC = 0
+conttotal = 0
+playerselection <- c()
+for (i in (1:length(df$Player))) {
+if (contG < 6 & (df$Pos[i] == 'PG' | df$Pos[i] == 'SG')){
+   contG = contG + 1
+   conttotal = conttotal + 1
+   playerselection[conttotal] <- df$Player[i]
+   print(playerselection)
+  
+}
+else if (contF < 5 & (df$Pos[i] == 'SF' | df$Pos[i] == 'PF')){
+  contF = contF +1
+  conttotal = conttotal +1
+  playerselection[conttotal] <- df$Player[i]
+  print(playerselection)
+}
+else if (contC < 4 & df$Pos[i] == 'C'){
+  contC = contC + 1
+  conttotal = conttotal + 1
+  playerselection[conttotal] <- df$Player[i]
+  print(playerselection)
+
+}}
+print(playerselection)
+df<- df %>% filter(df$Player %in% playerselection)
+
+return(df)
+}
+
+```
+
+We create the dataframe with the predictions of the model, and if the result is correct or not.
+We have to create a function that chooses (from the players with the highest probability of the model) the positions in the All NBATeam.
+
+```{r}
+funcion_posicions <- function(df){
+
+contG = 0
+contF = 0
+contC = 0
+conttotal = 0
+playerselection <- c()
+for (i in (1:length(df$Player))) {
+if (contG < 6 & (df$Pos[i] == 'PG' | df$Pos[i] == 'SG')){
+   contG = contG + 1
+   conttotal = conttotal + 1
+   playerselection[conttotal] <- df$Player[i]
+   print(playerselection)
+  
+}
+else if (contF < 6 & (df$Pos[i] == 'SF' | df$Pos[i] == 'PF')){
+  contF = contF +1
+  conttotal = conttotal +1
+  playerselection[conttotal] <- df$Player[i]
+  print(playerselection)
+}
+else if (contC < 3 & df$Pos[i] == 'C'){
+  contC = contC + 1
+  conttotal = conttotal + 1
+  playerselection[conttotal] <- df$Player[i]
+  print(playerselection)
+
+}}
+print(playerselection)
+df<- df %>% filter(df$Player %in% playerselection)
+
+return(df)
+}
+
+
+```
+
+## Final Visualizations:
+
+### YEAR 2015
+
+```{r}
+tablaprediccio15 <- funcion_posicions_2015(nuevodata2015)
+tablaprediccio15$quinteto <- as.logical(tablaprediccio15$quinteto)
+tablaresultats15 <- tablaprediccio15 %>% select(Player, Age, Pos, probs, quinteto)
+names(tablaresultats15)= c("Player","Age","Position","Probabilitat","Is in?")
+
+
+tablaresultats15 %>% gt()%>% tab_header(
+    title = md("Best players 2015"))
+
+no_corresponen2015 <- tablaprediccio15 %>% filter(quinteto %in% 0)
+no_corresponen2015
+
+nuevodata2015 %>% filter(Pos %in% c("PG","SG"))
+sustituts2015 <- nuevodata2015 %>% filter(Player %in% c("Kyrie Irving","Klay Thompson"))
+sustituts2015
+
+correccio2015 <- rbind(no_corresponen2015,sustituts2015)
+correccioresultats <- correccio2015 %>% select(Player, Age, Pos, probs, quinteto)
+correccioresultats$quinteto <- as.logical(correccioresultats$quinteto)
+names(correccioresultats)= c("Player","Age","Position","Probabilitat","Is in?")
+
+correccioresultats %>% gt()%>% tab_header(
+    title = md("substitutions"))
+
+plotly2015 <- ggplot(data = tablaprediccio15,mapping = aes(x=reorder(Player,probs),y=probs,fill = quinteto)) + geom_bar(stat = "identity")+
+  theme_bw() + theme(axis.text.x=element_text(angle=90))+labs(title = "Prediction",
+     subtitle = "2015",
+     x        = "Players",
+     y        = "Probability") + coord_cartesian(ylim = c(10,100))
+
+ggplotly(plotly2015)
+
+
+plotly2015pos <- ggplot(data = tablaprediccio15,
+                     mapping = aes( x = reorder(Player,probs),y=probs, fill = Pos)) +
+ 
+  geom_bar(stat = "identity") +
+   scale_fill_manual(values=c("chartreuse","brown1","deepskyblue", "brown3","deepskyblue3")) + 
+  theme_bw() +theme(axis.text.x=element_text(angle=90))+labs(title = "Predicition",
+     subtitle = "2015",
+     x        = "Players",
+     y        = "Probability") + coord_cartesian(ylim = c(10,100))
+ggplotly(plotly2015pos)
+
+```
+
+Checking the model in 2015, we appreciate that the results obtained seem very accurate. Whereas we have a database with many players every season, in this case 650, manages to predict 13 of the 15 players at the ALL NBA TEAM.
+
+Knowing that voting is subjective depending on the player's game, and not on his statistics, we note that our model explains these votes with a very high probability of success.
+In the table of substitutions, these are the players who should be in the quintet (Kyrie Irving and Klay Thompson) replacing those who have not been able to correctly predict our model (Jhon Wall and Damian Lillard). We also show the probabilities that our model gives to these players. That way we can learn a little more about our mistakes.
+
+To make this boxplot we do it with a database of the 30 players who are most likely to be in the quintet.
+On the right we can see as the median of the players who are going to be in the quintet that year we give a probability of 71.49%, while we give the other players a median of 6.59%.
+We note that there are 3 outliers who are the players our model predicts will be. One of them does not enter due to the restriction of positions.
+
+In the position graph we can see the division of positions that explains a little more the errors of the model, as John Wall and Damian Lillard (both errors) enter although they have a higher probability than other players in the model, would enter position in the last two places.
+
+
+### YEAR 2016 
+```{r}
+
+###########2016
+
+tablaprediccio16 <- funcion_posicions(nuevodata2016)
+tablaprediccio16$quinteto <- as.logical(tablaprediccio16$quinteto)
+tablaresultats16 <- tablaprediccio16 %>% select(Player, Age, Pos, probs, quinteto)
+names(tablaresultats16)= c("Player","Age","Position","Probability","Is in?")
+
+
+tablaresultats16 %>% gt()%>% tab_header(
+    title = md("Best players 2016"))
+
+no_corresponen2016 <- tablaprediccio16 %>% filter(quinteto %in% 0)
+nuevodata2016 %>% filter(Pos %in% c("SG","PF","SF","C"))
+sustituts2016 <- nuevodata2016 %>% filter(Player %in% c("DeAndre Jordan","Andre Drummond","Klay Thompson","Paul George"))
+
+correccio2016 <- rbind(no_corresponen2016,sustituts2016)
+correccioresultats2016 <- correccio2016 %>% select(Player, Age, Pos, probs, quinteto)
+correccioresultats2016$quinteto <- as.logical(correccioresultats2016$quinteto)
+names(correccioresultats2016)= c("Player","Age","Position","Probability","Is in?")
+
+correccioresultats2016 %>% gt()%>% tab_header(
+    title = md("Substitutions"))
+
+############## Graphs
+
+plotly2016 <- ggplot(data = tablaprediccio16,mapping = aes(x=reorder(Player,probs),y=probs,fill = quinteto)) +
+
+  geom_bar(stat = "identity")+
+  theme_bw() +theme(axis.text.x=element_text(angle=90))+labs(title = "Predictions",
+     subtitle = "2016",
+     x        = "Players",
+     y        = "Probability") + coord_cartesian(ylim = c(10,100))
+ggplotly(plotly2016)
+
+
+plotly2016pos <- ggplot(data = tablaprediccio16,
+                     mapping = aes( x = reorder(Player,probs),y=probs, fill = Pos)) +
+ 
+  geom_bar(stat = "identity") +
+   scale_fill_manual(values=c("chartreuse","brown1","deepskyblue", "brown3","deepskyblue3")) + 
+  theme_bw() +theme(axis.text.x=element_text(angle=90))+labs(title = "Predictions",
+     subtitle = "2016",
+     x        = "Players",
+     y        = "Probability") + coord_cartesian(ylim = c(10,100))
+ggplotly(plotly2016pos)
+
+
+
+```
+
+This year is the year in which we find the most mistakes, especially focusing on the mistake of James Hardem who gives him a 97.8% probability of belonging to the quintets. Researching a bit about the player we realize that he belongs to the quintets from 2013 to 2019 (with the exception of this year) and since 2014 he always appears in the first quintet.
+
+We note that this year is the year in which the player got the fewest wins (a difference of 14 compared to other years), the mistake is because our model does not consider them. We think that this lack of victories influenced the voting. Although his individual statistics were very prominent. This player would have entered the quintet according to the votes in that year in the NBA, but as we know, there is a restriction of positions, which caused him not to enter.
+
+In the table we can find which players have to be in the quintet replacing the model errors.
+
+This year we have the highest average of players who are not in the quintet, although we can see that the median probability of players who are in the quintet is twice that of those who are not. Therefore we can consider that we make a good prediction.
+
+As we can see in this model, we already have 6 players in the "guard" position, this fact causes James Harden to not be able to enter this year's ALL NBA TEAM.
+
+
+### YEAR 2017:
+
+```{r}
+
+#############2017
+
+tablaprediccio17 <- funcion_posicions(nuevodata2017)
+tablaprediccio17$quinteto <- as.logical(tablaprediccio17$quinteto)
+tablaresultats17 <- tablaprediccio17 %>% select(Player, Age, Pos, probs, quinteto)
+names(tablaresultats17)= c("Player","Age","Position","Probability","Is in?")
+
+
+tablaresultats17 %>% gt()%>% tab_header(
+    title = md("Best layers 2017"))
+
+no_corresponen2017 <- tablaprediccio17 %>% filter(quinteto %in% 0)
+no_corresponen2017
+nuevodata2017 %>% filter(Pos %in% c("PF","SF","C"))
+sustituts2017 <- nuevodata2017 %>% filter(Player %in% c("DeAndre Jordan","Draymond Green"))
+
+correccio2017 <- rbind(no_corresponen2017,sustituts2017)
+correccioresultats2017 <- correccio2017 %>% select(Player, Age, Pos, probs, quinteto)
+correccioresultats2017$quinteto <- as.logical(correccioresultats2017$quinteto)
+names(correccioresultats2017)= c("Player","Age","Position","Probability","Is in?")
+
+correccioresultats2017 %>% gt()%>% tab_header(
+    title = md("Substitutions"))
+
+############# Graphs
+plotly2017 <- ggplot(data = tablaprediccio17,mapping = aes(x=reorder(Player,probs),y=probs,fill = quinteto)) +
+
+  geom_bar(stat = "identity")+
+  theme_bw() +theme(axis.text.x=element_text(angle=90))+labs(title = "Predictions",
+     subtitle = "2017",
+     x        = "Player",
+     y        = "Probability") + coord_cartesian(ylim = c(0,100))
+ggplotly(plotly2017)
+
+
+plotly2017pos <- ggplot(data = tablaprediccio17,
+                     mapping = aes( x = reorder(Player,probs),y=probs, fill = Pos)) +
+ 
+  geom_bar(stat = "identity") +
+   scale_fill_manual(values=c("chartreuse","brown1","deepskyblue", "brown3","deepskyblue3")) + 
+  theme_bw() +theme(axis.text.x=element_text(angle=90))+labs(title = "Prediction",
+     subtitle = "2017",
+     x        = "Player",
+     y        = "Probability") + coord_cartesian(ylim = c(0,100))
+ggplotly(plotly2017pos)
+
+
+
+```
+
+This year we can consider that there are many players with a very high probability of belonging to the quintet. We note that there are very few errors. There are two mistakes, and they are not in the top 10.
+
+Karl-Anthony Towns of the Minnesota Timberwolves team, has a total of 31 wins and 51 losses. Being these the minimum of victories of all the predicted players. One thing we can also highlight is that this player was 16th in the quintet positions, with 4 points less than Deandre Jordan who came in 15th.
+
+Gordon Hayward that year made the year in best statistics. It was his only year with more than 20 points per game played. It was the only year he was selected for the NBA All Star.
+
+The boxplot diagram shows a big difference between the two groups, a little even more remarkable than the other years. With averages of 8.76% compared to 95.07%.
+
+Focusing on the outlier we find, we realize that it is Deandre Jordan with a probability of 10.64% and that he occupies the same position as Karl-Anthony Towns (the mistake of before). Deandre Jordan is a player with a very defensive facet, so he did not have very good statistics, but he has a very good reputation in the league. His team scored 20 more victories this year than the Karl-Anthony Towns team, also entering the playoffs at the top of the table.
+
+In the position graph we find it interesting to see how there is no player in the PS position who currently has many changes in the competition. Occupying it to the extent by SF or C players.
+
+
