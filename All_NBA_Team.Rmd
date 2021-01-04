@@ -39,13 +39,13 @@ language:
 
 ```{r setup, cache = F, echo = F, message = F, warning = F, tidy = F}
 
-# CONFIGURACIÓN GENERAL
+# GENERAL CONFIGURATION
 library(knitr)
 options(width = 100)
-# Opciones generales chunks
+
 opts_chunk$set(echo=T,message = F, error = F, warning = F, comment = NA, fig.align = 'center', dpi = 100, tidy = F, cache.path = '.cache/', fig.path = './figure/')
 
-#options(xtable.type = 'html')
+
 knit_hooks$set(inline = function(x) {
   
   if(is.numeric(x)) {
@@ -54,13 +54,13 @@ knit_hooks$set(inline = function(x) {
     paste(as.character(x), collapse = ', ')
   }
 })
-#knit_hooks$set(plot = knitr:::hook_plot_html)
+
 ```
 
 
 
 ```{r, cache = F, echo = F, message = F, warning = F, tidy = F}
-# Especificamos las librerías necesarias en esta lista
+# Librarys:
 
 packages = c("tidyverse","knitr","matlib","pracma","readr","haven","stats4","fitdistrplus","vcd","FNN","ISLR","MASS","dplyr","faraway","car","leaps","boot","pROC","nnet","class","glmnet","pls","plotly","gt","ggplot2","readxl")
 
@@ -77,9 +77,8 @@ package.check <- lapply(packages, FUN = function(x) {
 #verify they are loaded
 search()
 ```
-# PREDICITON OF ALL NBA TEAM
 
-## 1. SUMMARY: WHAT DO WE WANT?
+## SUMMARY: WHAT DO WE WANT?
 
 ALL NBA TEAM of the Year is an annual NBA award given to the best players of the season. Voting is by a group of sports journalists and announcers from the United States and Canada. The team has been chosen in each NBA season, since its inauguration in 1946. The award consists of three quintets consisting of a total of 15 players, five on each team. It originally consisted of two teams, but in 1988 it was increased to three.
 
@@ -89,28 +88,20 @@ Players receive five points for each vote on the first team, three points for ea
 
 Our goal is to make a model that is able to predict these 15 players. To do this we need to make a multiple logistic regression model where, according to each player's statistics, the model gives you a chance to belong to the best quintets. We need to keep in mind the restriction that only certain players in each position can have. We have a database, explained more specifically in point 2. INTRODUCTION TO THE DATABASE where we will have all the information to create this model. We will check the results obtained by the model in some of the last seasons where we already know the results, then we will test it with the statistics we have so far to predict this year’s quintets.
 
-## 2. DATA:
+## DATA:
 
-Our information for making this model is divided into two databases: 
-- A database where we have all the information from 1980 to 2017 with all the player statistics for each season. We also introduce the quintetO variable that will provide us with information on whether or not the player is in the quintet of the season.
-- And another where we have the information of the data of the current season.
-In the first database we have the statistics of each player in a given season. The data have the following variables:
+Our information for making this model is in 'Season_stats.csv': 
+In this databas, we have all the information from 1980 to 2017 with all the player statistics for each season. We also introduce one variable called 'quinteto', this variable will provide us with information on whether or not the player is in the quintet of the season. 
+All information about the database is in PDF.
 
-|Variables explained in the document|
 
-## 3. PROCESS
+## PROCESS
 
-We will divide the process into two parts:
+we have to create a model with the database that contains all the statistics from 1980 to 2017. In this, we will predict the All NBA Teams of the years 2015, 2016 and 2017. In the study we will be able to check which players have predicted correctly, and which ones don’t.
 
-- On the one hand we have the creation of the model with a database that contains all the statistics from 1980 to 2017. In this, we will predict the quintets of the years 2015, 2016 and 2017. In the study we will be able to check which players have predicted correctly, and which ones don’t.
+- The steps we have followed are as follows:
 
-- In the second part we will take the data available this year from the competition to the stop due to the COVID-19. In this one we will not be able to check if the model hits the players or not as this prize has not been awarded yet. We will also work on a data.frame that does not contain the same variables (although it is similar) so we will have to create another model.
-
-### 3.1. MODEL CREATION PROCESS WITH KNOWN DATA (1980 - 2017)
-
-The steps we have followed are as follows:
-
-- Reading and cleaning the dataframe (reading the csv, setting the variable type, changing null values to 0, deleting rows with duplicate players…)
+1. Reading and cleaning the dataframe (reading the csv, setting the variable type, changing null values to 0, deleting rows with duplicate players…)
 
 ```{r}
 #Read csv file
@@ -143,12 +134,12 @@ library(tidyverse)
 Seasons_Stats2 <- Seasons_Stats %>% subset(Year > 1979)
 ```
 
-### Players in the all nba team
+#### Players in the all nba team
 
 ```{r}
-#What we want to do is find which players are most likely to be in the best quintet. We will do this based on a training set and a test set.To do this, we will then nail the all_nba team (quinteto) variable, followd by the year (quinteto_year), which will have 1 (if the player is in a better all nba team) and 0 if it is not. In this way, we enter the data, and then we enter the column.
+#What we want to do is find which players are most likely to be in the all-nba team. We will do this based on a training set and a test set. To do this, we will then nail the all_nba team (quinteto) variable, followd by the year (quinteto_year), which will have 1 (if the player is in a better all nba team) and 0 if it is not. In this way, we enter the data, and then we enter the column.
 
-#Those players who have a * in the database are those who have been elected to the Basketball Hall of Fame. We also have it in the database.
+#The players who have a * in the database are those who have been elected to the Basketball Hall of Fame. We also have it in the database.
 
 quinteto80 <- c("Julius Erving*","Dan Roundfield","Larry Bird*","Marques Johnson","Kareem Abdul-Jabbar*","Moses Malone*","George Gervin*","Dennis Johnson*","Paul Westphal","Gus Williams")
 
@@ -228,10 +219,10 @@ quinteto17 <- c("Kawhi Leonard","Kevin Durant","Jimmy Butler","LeBron James","Gi
 quinteto20 <-c('Guillem Miralles','Miguel Payá')
 ```
 
-- Introduce a variable in the comic called a quintet, which tells us whether or not the player has been in the ALL NBA TEAM of that season.
+- Now, we are going to inroduce this information in the database creating a funtion.
 
 ```{r}
-#With this function what we do is introduce the all nba team of each year and the year to which it corresponds. Our function what it does is return a data.frame with the new column (quinteto) indicating 1 if the player is in the quintet, and 0 if it is not. Then we will join all the dat.frame in order to get the data for all the seasons.
+#With this function what we do is introduce the all nba team of each year and the year to which it corresponds. Our function what it does is return a data.frame with the new column (quinteto) indicating 1 if the player is in the quintet, and 0 if it is not. Then we will join all the data.frame in order to get the data for all the seasons.
 
 funcion_quinteto <- function(quinteto_df,any){
 df <- Seasons_Stats2 %>% subset(Year == any)
@@ -372,6 +363,7 @@ step(glmnba)
 
 ### GLM
 
+This is our final glm:
 ```{r}
 glmnba.final <-  glm(formula = quinteto ~ Age + G + STL. + TOV. + USG. + DWS + 
     WS + BPM + VORP + FGA + PF + ORB + AST + BLK, family = "binomial", 
@@ -380,6 +372,7 @@ summary(glmnba.final)
 
 ```
 
+Now, we predict with this method, and we will see the results. This is usefull to compare with the other methods.
 ```{r}
 nba.prob <- predict(glmnba.final,bdpredict,type="response")
 
@@ -391,6 +384,7 @@ table(nba.pred,bdpredict$quinteto)
 (3462 + 53 )/3559
 ```
 
+The ROC curve:
 ```{r}
 library(pROC)
 pred2 <- predict(glmnba.final, type="response")
@@ -402,6 +396,7 @@ ci(curv_roc4)
 
 ### QDA
 
+We select the same variables as in GLM:
 ```{r}
 library(MASS)
 qdanba <- qda(formula = quinteto ~ Age + G + STL. + TOV. + USG. + DWS + 
@@ -429,7 +424,7 @@ ci(c.roc)
 ```
 
 ### LDA:
-
+The same than the other methods.
 ```{r}
 ldanba <- lda(formula = quinteto ~ Age + G + STL. + TOV. + USG. + DWS + 
     WS + BPM + VORP + FGA + PF + ORB + AST + BLK, 
@@ -461,6 +456,8 @@ bd16 <- rbind(bd15,df_any15)
 bd17 <- rbind(bd16,df_any16)
 ```
 
+We create a dataframe that contain the probability of the players to be in the All Nba Team. But we have a problem, in this teams ther are a position resticion. For this reason, we will create a funcion to select the players to the team taking into account the probability, and his position.
+
 ```{r}
 glmnba2015 <- glm(formula = quinteto ~ Age + G + STL. + TOV. + USG. + DWS + 
     WS + BPM + VORP + FGA + PF + ORB + AST + BLK, family = "binomial", 
@@ -476,9 +473,19 @@ prueba2015 <- nba2015[1:40]
 
 probs <- (prueba2015)*100
 nuevodata2015 <- data.frame(probs,df_any15[names(prueba2015),1:5])
-
+head(nuevodata2015)
 ```
 
+As we can see, we have:
+
+  - Probs: the probability that the model assigns to the player to be in the ALL-NBA Team.
+  - Quinteto: If the player really is in the All-NBA team
+  - Year: Season
+  - Player: Name
+  - Pos: Position
+  - Age
+
+We do the same with 2016:
 ```{r}
 glmnba2016 <- glm(formula = quinteto ~ Age + G + STL. + TOV. + USG. + DWS + 
     WS + BPM + VORP + FGA + PF + ORB + AST + BLK, family = "binomial", 
@@ -493,6 +500,7 @@ nba2016 <- sort(nba.prob2016, decreasing=TRUE)
 prueba2016 <- nba2016[1:40]
 probs <- (prueba2016)*100
 nuevodata2016 <- data.frame(probs,df_any16[names(prueba2016),1:5])
+head(nuevodata2016)
 ```
 
 ```{r}
@@ -508,51 +516,19 @@ nba2017 <- sort(nba.prob2017, decreasing=TRUE)
 prueba2017 <- nba2017[1:40]
 probs <- (prueba2017)*100
 nuevodata2017 <- data.frame(probs,df_any17[names(prueba2017),1:5])
-
+head(nuevodata2017)
 ```
 
+But, as we have already said, we have to create a function to select the players taking into account the position. In the PDF you can find it more explined, but in brief:
 
-```{r}
-
-
-funcion_posicions_2015 <- function(df){
-
-contG = 0
-contF = 0
-contC = 0
-conttotal = 0
-playerselection <- c()
-for (i in (1:length(df$Player))) {
-if (contG < 6 & (df$Pos[i] == 'PG' | df$Pos[i] == 'SG')){
-   contG = contG + 1
-   conttotal = conttotal + 1
-   playerselection[conttotal] <- df$Player[i]
-   print(playerselection)
+In each vote of 5 players (forming one team):
   
-}
-else if (contF < 5 & (df$Pos[i] == 'SF' | df$Pos[i] == 'PF')){
-  contF = contF +1
-  conttotal = conttotal +1
-  playerselection[conttotal] <- df$Player[i]
-  print(playerselection)
-}
-else if (contC < 4 & df$Pos[i] == 'C'){
-  contC = contC + 1
-  conttotal = conttotal + 1
-  playerselection[conttotal] <- df$Player[i]
-  print(playerselection)
+    - 2 players are guard (in our data.frame "PG" and "SG"). In total there are 6 guards.
+    - 2 are forward, ("SF" and "PF"). In total there are 6 forwards.
+    - The last player is center ("C"). In total there are 3 centers.
+    
+And the same for the other two teams.
 
-}}
-print(playerselection)
-df<- df %>% filter(df$Player %in% playerselection)
-
-return(df)
-}
-
-```
-
-We create the dataframe with the predictions of the model, and if the result is correct or not.
-We have to create a function that chooses (from the players with the highest probability of the model) the positions in the All NBATeam.
 
 ```{r}
 funcion_posicions <- function(df){
@@ -597,7 +573,9 @@ return(df)
 ### YEAR 2015
 
 ```{r}
-tablaprediccio15 <- funcion_posicions_2015(nuevodata2015)
+########################### 2015:
+
+tablaprediccio15 <- funcion_posicions(nuevodata2015)
 tablaprediccio15$quinteto <- as.logical(tablaprediccio15$quinteto)
 tablaresultats15 <- tablaprediccio15 %>% select(Player, Age, Pos, probs, quinteto)
 names(tablaresultats15)= c("Player","Age","Position","Probabilitat","Is in?")
@@ -621,6 +599,8 @@ names(correccioresultats)= c("Player","Age","Position","Probabilitat","Is in?")
 correccioresultats %>% gt()%>% tab_header(
     title = md("substitutions"))
 
+
+##################################### graphs
 plotly2015 <- ggplot(data = tablaprediccio15,mapping = aes(x=reorder(Player,probs),y=probs,fill = quinteto)) + geom_bar(stat = "identity")+
   theme_bw() + theme(axis.text.x=element_text(angle=90))+labs(title = "Prediction",
      subtitle = "2015",
@@ -643,14 +623,11 @@ ggplotly(plotly2015pos)
 
 ```
 
-Checking the model in 2015, we appreciate that the results obtained seem very accurate. Whereas we have a database with many players every season, in this case 650, manages to predict 13 of the 15 players at the ALL NBA TEAM.
+Checking the model in 2015, we appreciate that the results obtained seem very accurate. Whereas we have a database with many players every season, in this case 650, manages to predict 12 of the 15 players at the ALL NBA TEAM.
 
 Knowing that voting is subjective depending on the player's game, and not on his statistics, we note that our model explains these votes with a very high probability of success.
-In the table of substitutions, these are the players who should be in the quintet (Kyrie Irving and Klay Thompson) replacing those who have not been able to correctly predict our model (Jhon Wall and Damian Lillard). We also show the probabilities that our model gives to these players. That way we can learn a little more about our mistakes.
 
-To make this boxplot we do it with a database of the 30 players who are most likely to be in the quintet.
-On the right we can see as the median of the players who are going to be in the quintet that year we give a probability of 71.49%, while we give the other players a median of 6.59%.
-We note that there are 3 outliers who are the players our model predicts will be. One of them does not enter due to the restriction of positions.
+In the table of substitutions, these are the players who should be in the all nba team (Kyrie Irving and Klay Thompson) replacing those who have not been able to correctly predict our model (Jhon Wall and Damian Lillard). We also show the probabilities that our model gives to these players. That way we can learn a little more about our mistakes.
 
 In the position graph we can see the division of positions that explains a little more the errors of the model, as John Wall and Damian Lillard (both errors) enter although they have a higher probability than other players in the model, would enter position in the last two places.
 
@@ -708,13 +685,11 @@ ggplotly(plotly2016pos)
 
 ```
 
-This year is the year in which we find the most mistakes, especially focusing on the mistake of James Hardem who gives him a 97.8% probability of belonging to the quintets. Researching a bit about the player we realize that he belongs to the quintets from 2013 to 2019 (with the exception of this year) and since 2014 he always appears in the first quintet.
+This year is the year in which we find the most mistakes, especially focusing on the mistake of James Hardem who gives him a 97.8% probability of belonging to the quintets. Researching a bit about the player we realize that he belongs to the all nba teams from 2013 to 2019 (with the exception of this year) and since 2014 he always appears in the first team.
 
 We note that this year is the year in which the player got the fewest wins (a difference of 14 compared to other years), the mistake is because our model does not consider them. We think that this lack of victories influenced the voting. Although his individual statistics were very prominent. This player would have entered the quintet according to the votes in that year in the NBA, but as we know, there is a restriction of positions, which caused him not to enter.
 
 In the table we can find which players have to be in the quintet replacing the model errors.
-
-This year we have the highest average of players who are not in the quintet, although we can see that the median probability of players who are in the quintet is twice that of those who are not. Therefore we can consider that we make a good prediction.
 
 As we can see in this model, we already have 6 players in the "guard" position, this fact causes James Harden to not be able to enter this year's ALL NBA TEAM.
 
@@ -779,10 +754,14 @@ Karl-Anthony Towns of the Minnesota Timberwolves team, has a total of 31 wins an
 
 Gordon Hayward that year made the year in best statistics. It was his only year with more than 20 points per game played. It was the only year he was selected for the NBA All Star.
 
-The boxplot diagram shows a big difference between the two groups, a little even more remarkable than the other years. With averages of 8.76% compared to 95.07%.
-
 Focusing on the outlier we find, we realize that it is Deandre Jordan with a probability of 10.64% and that he occupies the same position as Karl-Anthony Towns (the mistake of before). Deandre Jordan is a player with a very defensive facet, so he did not have very good statistics, but he has a very good reputation in the league. His team scored 20 more victories this year than the Karl-Anthony Towns team, also entering the playoffs at the top of the table.
 
 In the position graph we find it interesting to see how there is no player in the PS position who currently has many changes in the competition. Occupying it to the extent by SF or C players.
 
+
+## Final Conclusions 
+
+In conclusion, our model obtains a very high reliability when we talk mainly about the 5 players most likely to be in the all-nba team per year. In players to whom our model gives them lower probabilities, the end results are worse, but not bad. Anyway, we think the reliability that our model gets is very high, as we saw in the results.
+
+The team's total victories are significant, as they are not numerous. This is the point where we think our model has found the most mistakes. According to our hypothesis, if we had a database from which to extract this possible variable, our results would significantly improve the study.
 
