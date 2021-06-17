@@ -1,4 +1,4 @@
-# All_NBA_Team
+# All_NBA_Team / RStudio
 ### By: Guillem Miralles, Miguel Payà and Joan Llavata
 #### In this project, we try to create a model to make a prediction of the all nba team.
 The data is avaible in https://www.kaggle.com/drgilermo/nba-players-stats.
